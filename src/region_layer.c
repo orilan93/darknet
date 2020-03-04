@@ -10,7 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-layer make_region_layer(int batch, int w, int h, int n, int classes, int coords)
+layer make_region_layer(int batch, int w, int h, int n, int classes, int coords, int max_boxes)
 {
     layer l = {0};
     l.type = REGION;
@@ -30,7 +30,8 @@ layer make_region_layer(int batch, int w, int h, int n, int classes, int coords)
     l.bias_updates = calloc(n*2, sizeof(float));
     l.outputs = h*w*n*(classes + coords + 1);
     l.inputs = l.outputs;
-    l.truths = 30*(l.coords + 1);
+    l.max_boxes = max_boxes;
+    l.truths = l.max_boxes*(l.coords + 1);
     l.delta = calloc(batch*l.outputs, sizeof(float));
     l.output = calloc(batch*l.outputs, sizeof(float));
     int i;
@@ -198,7 +199,7 @@ void forward_region_layer(const layer l, network net)
     for (b = 0; b < l.batch; ++b) {
         if(l.softmax_tree){
             int onlyclass = 0;
-            for(t = 0; t < 30; ++t){
+            for(t = 0; t < l.max_boxes; ++t){
                 box truth = float_to_box(net.truth + t*(l.coords + 1) + b*l.truths, 1);
                 if(!truth.x) break;
                 int class = net.truth[t*(l.coords + 1) + b*l.truths + l.coords];
@@ -235,7 +236,7 @@ void forward_region_layer(const layer l, network net)
                     int box_index = entry_index(l, b, n*l.w*l.h + j*l.w + i, 0);
                     box pred = get_region_box(l.output, l.biases, n, box_index, i, j, l.w, l.h, l.w*l.h);
                     float best_iou = 0;
-                    for(t = 0; t < 30; ++t){
+                    for(t = 0; t < l.max_boxes; ++t){
                         box truth = float_to_box(net.truth + t*(l.coords + 1) + b*l.truths, 1);
                         if(!truth.x) break;
                         float iou = box_iou(pred, truth);
@@ -262,7 +263,7 @@ void forward_region_layer(const layer l, network net)
                 }
             }
         }
-        for(t = 0; t < 30; ++t){
+        for(t = 0; t < l.max_boxes; ++t){
             box truth = float_to_box(net.truth + t*(l.coords + 1) + b*l.truths, 1);
 
             if(!truth.x) break;
