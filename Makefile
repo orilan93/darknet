@@ -1,11 +1,8 @@
-GPU=0
-CUDNN=0
-OPENCV=1
-OPENMP=0
+GPU=1
+CUDNN=1
+OPENCV=0
+OPENMP=1
 DEBUG=0
-
-debug: OPTS=-O0 -g
-debug: all
 
 ARCH= -gencode arch=compute_30,code=sm_30 \
       -gencode arch=compute_35,code=sm_35 \
@@ -34,6 +31,10 @@ CFLAGS=-Wall -Wno-unused-result -Wno-unknown-pragmas -Wfatal-errors -fPIC
 
 ifeq ($(OPENMP), 1) 
 CFLAGS+= -fopenmp
+endif
+
+ifeq ($(debug), 1) 
+OPTS=-O0 -g
 endif
 
 ifeq ($(DEBUG), 1) 
