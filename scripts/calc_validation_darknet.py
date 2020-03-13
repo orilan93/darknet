@@ -8,10 +8,21 @@ import cv2
 from operator import add
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import math
+import numpy as np
 
 PROB_THRESHOLD = 0.25
 IOU_THRESH = 0.25
+
+#PR curve calculation method, NB mutual exclusive
+EXPONENTAL_SCORE = False
+GAUSSIAN_SCORE =False
+CURVE_SMOOTHING = False
+ACCEPT_PARENT = True
+
+POINT_INTER = False
+POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -33,6 +44,7 @@ class Node:
 
 class Prediction:
     label = None
+    score = 0
     def __init__(self, image_id, species, prob, xmin, ymin, xmax, ymax):
         self.image_id = int(image_id)
         self.species = species_nodes[species]
@@ -125,12 +137,13 @@ def check_prediction(label):
         return
     is_in_children, tree_offset = in_children(label.species, label.prediction.species)
     if is_in_children:
-        label.predicted = True;
+        label.predicted = True
         label.tree_offset = tree_offset
         return
     is_in_parents, tree_offset = in_parents(label.species,label.prediction.species)
     if is_in_parents:
-        label.predicted = False; label.tree_offset = tree_offset
+        label.predicted = ACCEPT_PARENT or GAUSSIAN_SCORE or EXPONENTAL_SCORE #Must be true to use score
+        label.tree_offset = tree_offset
         return
 
 
@@ -283,14 +296,34 @@ precision_list = []
 
 false_negatives = list(filter(lambda e: not e.predicted, labels_flat))
 
+for e in preds_flat:
+
+    if(e.label is None or e.label.predicted == False): ##Not predicted
+        e.score = 0
+
+    elif (e.label.tree_offset < 0):
+        offset = abs(e.label.tree_offset)
+        if(EXPONENTAL_SCORE):
+            e.score = (10**(1/(offset+1)))/10
+        elif(GAUSSIAN_SCORE):
+            #e^(-(x^2)/2)
+            e.score = math.exp(-(offset)**2/2)
+            pass
+        else:
+            e.score=1
+
+    elif (e.label.tree_offset >= 0):
+        e.score = 1
 
 for i in range(len(preds_flat)):
     true_positives = list(filter(lambda e: e.label is not None and e.label.predicted,preds_flat[:i+1]))
     false_positives =  list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat[:i+1]))
 
-    precision = len(true_positives) / (len(true_positives) + len(false_positives))
-    recall = len(true_positives) / (len(true_positives) + len(false_negatives))
-
+    #precision = len(true_positives) / (len(true_positives) + len(false_positives))
+    precision = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_positives))
+    recall = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_negatives))
+    #recall = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_negatives))
+    print(recall)
     predicted = preds_flat[i].label is not None and preds_flat[i].label.predicted
 
     row = {"predicted":predicted,"precision":precision, "recall": recall}
@@ -298,11 +331,43 @@ for i in range(len(preds_flat)):
 
 #print(precision_list)
 
+
+if(CURVE_SMOOTHING):
+    precision_list[0]["smooth"] = precision_list[0]["precision"]
+    for i in range(1, len(precision_list)-1):
+        '''
+        avg = 0
+        for j in range(-2,2):
+            avg = avg+precision_list[i-j]["precision"]
+        avg = avg/5
+        '''
+        avg = (precision_list[i-1]["precision"]*10+precision_list[i]["precision"]+precision_list[i+1]["precision"]*10)/21
+
+        precision_list[i]["smooth"] = avg
+    precision_list[-1]["smooth"] = precision_list[-1]["precision"]
+
+
+    for e in precision_list:
+        e["precision"] = e["smooth"]
+
 #do interpolation
-for i in range(len(precision_list)):
-    r = filter(lambda e: e["recall"] >= precision_list[i]["recall"], precision_list)
-    r = max(r, key = lambda e: e["precision"])
-    precision_list[i]["precision_inter"] = r["precision"]
+
+if(POINT_INTER):
+    skip = POINT_INTER_SKIP
+    for r in np.arange(0,1,skip):
+        max =0
+        rows = [x for x in precision_list if( x["recall"] > r and x["recall"] <= (r + skip))]
+        for row in rows:
+            if row["precision"]> max: max = row["precision"]
+        for row in rows:
+            row["precision_inter"] = max
+else:
+    for i in range(len(precision_list)):
+        r = filter(lambda e: e["recall"] >= precision_list[i]["recall"], precision_list)
+        r = max(r, key = lambda e: e["precision"])
+        precision_list[i]["precision_inter"] = r["precision"]
+
+
 #print(precision_list)
 
 
