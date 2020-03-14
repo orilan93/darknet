@@ -4,7 +4,6 @@ import argparse
 import csv
 import functools
 import re
-import cv2
 from operator import add
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -219,27 +218,6 @@ print("Loaded labels:")
 print(labels)
 
 #calculate IOU
-
-def draw_dumb_box(labels, preds):
-
-    # load the image
-    image = cv2.imread("fish.png")
-    # draw the ground-truth bounding box along with the predicted
-    # bounding box
-    for pred in preds:
-        pred_bbox = pred.bbox
-        cv2.rectangle(image, (int(pred_bbox[0]),int(pred_bbox[1])),
-                      (int(pred_bbox[2]), int(pred_bbox[3])), (255, 255, 255), 2)
-    for key, image_labels in labels.items():
-        for label in image_labels:
-            label_bbox = label.bbox
-            cv2.rectangle(image, (int(label_bbox[0]),int(label_bbox[1])),
-                          (int(label_bbox[2]), int(label_bbox[3])), (0, 0, 255), 2)
-
-    cv2.imshow("Image", image)
-    cv2.waitKey(0)
-
-
 
 #Assosicate labels and predictions
 for image_id, image_labels in labels.items():
