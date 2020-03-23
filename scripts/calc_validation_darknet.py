@@ -17,15 +17,12 @@ IOU_THRESH = 0.5
 EXPONENTAL_SCORE = False
 GAUSSIAN_SCORE =False
 CURVE_SMOOTHING = False
-ACCEPT_PARENT = False
+ACCEPT_PARENT = True
 
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
 
 USE_oLRP = True
-
-if USE_oLRP:
-    PROB_THRESHOLD = 0
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -179,6 +176,7 @@ step = 0.01
 if USE_oLRP: run = np.arange(0, 1, step)
 else: run = [PROB_THRESHOLD]
 LRPs = []
+result = 0
 for PROB_THRESHOLD in run:
 
     species_names = []
@@ -282,9 +280,9 @@ for PROB_THRESHOLD in run:
     false_positive = list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat))
 
     precision = len(true_positives)/(len(true_positives)+len(false_positive))
-    print(f"Precision {precision}")
+    #print(f"Precision {precision}")
     recall = len(true_positives)/(len(true_positives)+len(false_negatives))
-    print(f"Recall {recall}")
+    #print(f"Recall {recall}")
 
     if(not USE_oLRP):
         #Calulate MAP
@@ -384,9 +382,7 @@ for PROB_THRESHOLD in run:
             p = drop_list[i-1]["precision_inter"] #Here we miht want to use just percision instead
             auc += (r1-r2)*p
 
-
-        print(f"AUC {auc}")
-
+        result = auc
         #Plot
         pres=[]
         inter=[]
@@ -417,37 +413,44 @@ for PROB_THRESHOLD in run:
         LRP = (lrp_iou + len(false_negatives) + len(false_positive)) / \
               (len(true_positives) + len(false_positive) + len(false_negatives))
 
-        LRPs.append((LRP, s))
+        LRPs.append((LRP, s, precision, recall))
         print("LRP:", LRP, s)
 
+# FINISHED, print results
 if (USE_oLRP):
     print("LRPs (LRP, probability_treshold):")
     print(LRPs)
-    print("optimal LRP:", min(LRPs, key=lambda e: e[0]))
+    if (LRPs != []):
+        result = min(LRPs, key=lambda e: e[0])[0]
+        print("precision", min(LRPs, key=lambda e: e[0])[2])
+        print("recall", min(LRPs, key=lambda e: e[0])[3])
+        print("best probability treshold", min(LRPs, key=lambda e: e[0])[1])
+    print("metric", "oLRP")
+    print("result", result)
+else:
+    print("metric", "mAP")
+    print("result", result)
+    df = pd.DataFrame([o.__dict__ for o in labels_flat])
 
-df = pd.DataFrame([o.__dict__ for o in labels_flat])
+    print(
+        f"Species: , # correctly predicted : , #correctly predicted with more specific class: , # Predicted with less specific class")
 
+    for species in species_names:
+        try:
+            df_pred = df[df['predicted'] == True]  # & (df['species'].name==species)
+            df_species = df_pred['species'].apply(lambda s: s.name == species)
+            df_offset = [df_pred['tree_offset'].apply(lambda s: s > 0)][0]
+            z = zip(list(df_species), list(df_offset))
+            df_offset_child = [all(tup) for tup in z]
 
-print(f"Species: , # correctly predicted : , #correctly predicted with more specific class: , # Predicted with less specific class")
+            df_offset = [df_pred['tree_offset'].apply(lambda s: s < 0)][0]
+            z = zip(list(df_species), list(df_offset))
+            df_offset_parent = [all(tup) for tup in z]
 
-for species in species_names:
-    try:
-        df_pred = df[df['predicted']==True] #& (df['species'].name==species)
-        df_species = df_pred['species'].apply(lambda s: s.name == species)
-        df_offset = [df_pred['tree_offset'].apply(lambda s: s > 0)][0]
-        z = zip(list(df_species), list(df_offset))
-        df_offset_child = [all(tup) for tup in z]
+            count_correct = sum(df_species)
+            count_offset_child = sum(df_offset_child)
+            count_offset_parent = sum(df_offset_parent)
 
-        df_offset = [df_pred['tree_offset'].apply(lambda s: s < 0)][0]
-        z = zip(list(df_species), list(df_offset))
-        df_offset_parent = [all(tup) for tup in z]
-
-        count_correct= sum(df_species)
-        count_offset_child = sum(df_offset_child)
-        count_offset_parent = sum(df_offset_parent)
-
-        print( f"{species} & {count_correct} & {count_offset_child} & {count_offset_parent} \\\\")
-    except:
-        print( f"{species} & {0} & {0} & {0} \\\\")
-
-pass
+            print(f"{species} & {count_correct} & {count_offset_child} & {count_offset_parent} \\\\")
+        except:
+            print(f"{species} & {0} & {0} & {0} \\\\")
