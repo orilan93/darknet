@@ -431,21 +431,23 @@ df = pd.DataFrame([o.__dict__ for o in labels_flat])
 print(f"Species: , # correctly predicted : , #correctly predicted with more specific class: , # Predicted with less specific class")
 
 for species in species_names:
-    df_pred = df[df['predicted']==True] #& (df['species'].name==species)
-    df_species = df_pred['species'].apply(lambda s: s.name == species)
-    df_offset = [df_pred['tree_offset'].apply(lambda s: s > 0)][0]
-    z = zip(list(df_species), list(df_offset))
-    df_offset_child = [all(tup) for tup in z]
+    try:
+        df_pred = df[df['predicted']==True] #& (df['species'].name==species)
+        df_species = df_pred['species'].apply(lambda s: s.name == species)
+        df_offset = [df_pred['tree_offset'].apply(lambda s: s > 0)][0]
+        z = zip(list(df_species), list(df_offset))
+        df_offset_child = [all(tup) for tup in z]
 
-    df_offset = [df_pred['tree_offset'].apply(lambda s: s < 0)][0]
-    z = zip(list(df_species), list(df_offset))
-    df_offset_parent = [all(tup) for tup in z]
+        df_offset = [df_pred['tree_offset'].apply(lambda s: s < 0)][0]
+        z = zip(list(df_species), list(df_offset))
+        df_offset_parent = [all(tup) for tup in z]
 
-    count_correct= sum(df_species)
-    count_offset_child = sum(df_offset_child)
-    count_offset_parent = sum(df_offset_parent)
+        count_correct= sum(df_species)
+        count_offset_child = sum(df_offset_child)
+        count_offset_parent = sum(df_offset_parent)
 
-
-    print( f"{species} & {count_correct} & {count_offset_child} & {count_offset_parent} \\\\")
+        print( f"{species} & {count_correct} & {count_offset_child} & {count_offset_parent} \\\\")
+    except:
+        print( f"{species} & {0} & {0} & {0} \\\\")
 
 pass
