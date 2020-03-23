@@ -21,10 +21,10 @@ df = pd.read_csv(args.csv_file,
 df.fillna(0, inplace=True)
 df.epoch = pd.to_numeric(df.epoch)
 
-row_max_map = df["mAP"].idxmax()
+row_max_map = df["result"].idxmax()
 map_max_x = df["epoch"][row_max_map]
 df.set_index("epoch", inplace=True)
-max_map = df["mAP"][map_max_x]
+max_map = df["result"][map_max_x]
 
 ax = plt.gca()
 ax.set_ylim(0, 1)
@@ -35,4 +35,4 @@ plt.savefig(os.path.splitext(args.csv_file)[0] + ".png")
 plt.show()
 
 print("Epoch ", map_max_x)
-print("mAP ", max_map)
+print("result ", max_map)
