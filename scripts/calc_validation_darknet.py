@@ -17,7 +17,7 @@ IOU_THRESH = 0.5
 EXPONENTAL_SCORE = False
 GAUSSIAN_SCORE =False
 CURVE_SMOOTHING = False
-ACCEPT_PARENT = True
+ACCEPT_PARENT = False
 
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
@@ -167,13 +167,40 @@ def bb_intersection_over_union(boxA, boxB):
     # return the intersection over union value
     return iou
 
+def draw_dumb_box(preds):
+    import cv2
+    # load the image
+    # draw the ground-truth bounding box along with the predicted
+    # bounding box
+    img_array = []
+    size = None
+    for image in preds:
+        loaded_image = cv2.imread("data/dataset/"+str(image)+".png")
+        height, width, layers = loaded_image.shape
+        size = (width, height)
+        for pred in preds[image]:
+            color = (0, 0,255)
+            if pred.label is not None and pred.label.predicted == True:
+                color = (0,255,0)
+            pred_bbox = pred.bbox
+            cv2.rectangle(loaded_image, (int(pred_bbox[0]),int(pred_bbox[1])),
+                          (int(pred_bbox[2]), int(pred_bbox[3])), color, 2)
+        #cv2.imshow(str(image), loaded_image)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
+        img_array.append(loaded_image)
+
+    out = cv2.VideoWriter('predicted_fishy.avi', cv2.VideoWriter_fourcc(*'DIVX'), 1, size)
+    for i in range(len(img_array)):
+        out.write(img_array[i])
+    out.release()
 
 labels_flat = []
 species_names = []
 
 
 step = 0.01
-if USE_oLRP: run = np.arange(0, 1, step)
+if USE_oLRP: run = np.arange(0.5, 1, step)
 else: run = [PROB_THRESHOLD]
 LRPs = []
 result = 0
@@ -268,6 +295,9 @@ for PROB_THRESHOLD in run:
     for label in labels_flat:
         if label.prediction is not None:
             label.prediction.label = label
+
+
+    draw_dumb_box(predictions)
 
     try:
         preds_flat = functools.reduce(add, predictions.values())
@@ -403,9 +433,6 @@ for PROB_THRESHOLD in run:
 
         tau = IOU_THRESH
         s = PROB_THRESHOLD
-
-        true_positives = list(filter(lambda e: e.prediction.prob >= s, true_positives))
-        false_negatives = list(filter(lambda e: e.prediction.prob < s, true_positives)) + false_negatives
 
         lrp_iou = 0
         for e in true_positives:
