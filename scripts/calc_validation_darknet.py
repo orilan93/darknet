@@ -10,7 +10,7 @@ import pandas as pd
 import math
 import numpy as np
 
-PROB_THRESHOLD = 0.5
+PROB_THRESHOLD = 0.71
 IOU_THRESH = 0.5
 
 #PR curve calculation method, NB mutual exclusive
@@ -22,7 +22,7 @@ ACCEPT_PARENT = False
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
 
-USE_oLRP = True
+USE_oLRP = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -189,11 +189,15 @@ def draw_dumb_box(preds):
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
         img_array.append(loaded_image)
+        status = cv2.imwrite('./preds/'+str(image)+'.png', loaded_image)
+        print("Image written to file-system : ", status)
 
+    '''
     out = cv2.VideoWriter('predicted_fishy.avi', cv2.VideoWriter_fourcc(*'DIVX'), 1, size)
     for i in range(len(img_array)):
         out.write(img_array[i])
     out.release()
+    '''
 
 labels_flat = []
 species_names = []
