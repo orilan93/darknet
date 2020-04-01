@@ -10,7 +10,7 @@ import pandas as pd
 import math
 import numpy as np
 
-PROB_THRESHOLD = 0.71
+PROB_THRESHOLD = 0.5
 IOU_THRESH = 0.5
 
 #PR curve calculation method, NB mutual exclusive
@@ -18,11 +18,12 @@ EXPONENTAL_SCORE = False
 GAUSSIAN_SCORE =False
 CURVE_SMOOTHING = False
 ACCEPT_PARENT = False
+ACCEPT_FIRST_PARENT =False
 
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
 
-USE_oLRP = False
+USE_oLRP = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -143,6 +144,8 @@ def check_prediction(label):
     is_in_parents, tree_offset = in_parents(label.species,label.prediction.species)
     if is_in_parents:
         label.predicted = ACCEPT_PARENT or GAUSSIAN_SCORE or EXPONENTAL_SCORE #Must be true to use score
+        if(ACCEPT_FIRST_PARENT and tree_offset == -1):
+            label.prediceted = True
         label.tree_offset = tree_offset
         return
 
@@ -182,7 +185,14 @@ def draw_dumb_box(preds):
             color = (0, 0,255)
             if pred.label is not None and pred.label.predicted == True:
                 color = (0,255,0)
+            elif pred.label is not None and( pred.label.tree_offset is not None) and pred.label.tree_offset < 0:
+                color =  (0,255,255)
             pred_bbox = pred.bbox
+            if pred.label is not None:
+                cv2.putText(loaded_image, pred.label.species.name+str(pred.label.tree_offset),
+                            (int(pred_bbox[0]), int(pred_bbox[1]) - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            cv2.putText(loaded_image, pred.species.name + str(pred.prob), (int(pred_bbox[0]), int(pred_bbox[1]) - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
             cv2.rectangle(loaded_image, (int(pred_bbox[0]),int(pred_bbox[1])),
                           (int(pred_bbox[2]), int(pred_bbox[3])), color, 2)
         #cv2.imshow(str(image), loaded_image)
@@ -204,7 +214,7 @@ species_names = []
 
 
 step = 0.01
-if USE_oLRP: run = np.arange(0.5, 1, step)
+if USE_oLRP: run = np.arange(0.2, 1, step)
 else: run = [PROB_THRESHOLD]
 LRPs = []
 result = 0
@@ -237,7 +247,10 @@ for PROB_THRESHOLD in run:
         file_path = os.path.join(args.results_folder, file)
         with open(file_path) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=' ')
-            species = functools.reduce(lambda a,b: a if a in file else b,species_names)
+
+            species = re.search(r"_([A-Z][a-z]*\s*\w*)\.", file).group(0)[1:-1]
+            if species not in species_names:
+                raise AssertionError("Tried to load results file from class that is not in names file")
             for row in csv_reader:
                 prediction = Prediction(row[0], species, row[1], row[2], row[3],row[4],row[5])
                 if(float(row[1]) < PROB_THRESHOLD): continue
@@ -301,7 +314,7 @@ for PROB_THRESHOLD in run:
             label.prediction.label = label
 
 
-    draw_dumb_box(predictions)
+    #draw_dumb_box(predictions)
 
     try:
         preds_flat = functools.reduce(add, predictions.values())
@@ -314,9 +327,9 @@ for PROB_THRESHOLD in run:
     false_positive = list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat))
 
     precision = len(true_positives)/(len(true_positives)+len(false_positive))
-    #print(f"Precision {precision}")
+    print(f"Precision {precision}")
     recall = len(true_positives)/(len(true_positives)+len(false_negatives))
-    #print(f"Recall {recall}")
+    print(f"Recall {recall}")
 
     if(not USE_oLRP):
         #Calulate MAP
@@ -443,8 +456,9 @@ for PROB_THRESHOLD in run:
             lrp_iou += (1 - e.iou) / (1 - tau)
         LRP = (lrp_iou + len(false_negatives) + len(false_positive)) / \
               (len(true_positives) + len(false_positive) + len(false_negatives))
-
-        LRPs.append((LRP, s, precision, recall))
+        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None,preds_flat))
+        avg_offset = sum(e.label.tree_offset for e in offset_preds)/len(offset_preds)
+        LRPs.append((LRP, s, precision, recall, avg_offset))
         print("LRP:", LRP, s)
 
 # FINISHED, print results
@@ -452,10 +466,12 @@ if (USE_oLRP):
     print("LRPs (LRP, probability_treshold):")
     print(LRPs)
     if (LRPs != []):
-        result = min(LRPs, key=lambda e: e[0])[0]
-        print("precision", min(LRPs, key=lambda e: e[0])[2])
-        print("recall", min(LRPs, key=lambda e: e[0])[3])
-        print("best probability treshold", min(LRPs, key=lambda e: e[0])[1])
+        best = min(LRPs, key=lambda e: e[0])
+        result = best[0]
+        print("precision", best[2])
+        print("recall", best[3])
+        print("best probability treshold", best[1])
+        print("avg_offset", best[4])
     print("metric", "oLRP")
     print("result", result)
 else:

@@ -26,15 +26,15 @@ for file in $files; do
 done
 
 csv="${FOLDER}_thresh_${THRESH}_hier_${HIER}_nms_${NMS}.csv"
-echo "epoch,precision,recall,mAP" >> grid/$csv
+echo "epoch,precision,recall,avg_offset,metric,result" >> grid/$csv
 
 for file in $files; do
     echo $file
     rm results/*
     ./darknet detector valid data/$FOLDER.data data/$FOLDER.cfg $FOLDER/$file -thresh $THRESH -hier $HIER -nms $NMS
-    result=$(python scripts/calc_validation_darknet.py data/fish_taxonomy.xml results data/test.manifest 1920x1080 data/fish.names | grep -E "AUC|Recall|Precision" | cut -f 2- -d ' ' | tr '\n' ' ')
-    read prec rec auc <<< $result
-    result="$prec,$rec,$auc"
+    result=$(python3 scripts/calc_validation_darknet.py data/fish_taxonomy.xml results data/test.manifest 1920x1080 data/fish.names | grep -E "precision|recall|avg_offset|metric|result" | cut -f 2- -d ' ' | tr '\n' ' ')
+    read prec rec avg_offset metric res <<< $result
+    result="$prec,$rec,$avg_offset,$metric,$res"
     echo "$file,$result" >> grid/$csv
 done
 

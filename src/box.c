@@ -8,8 +8,8 @@ int nms_comparator(const void *pa, const void *pb)
     detection a = *(detection *)pa;
     detection b = *(detection *)pb;
     float diff = 0;
-    if(b.sort_class >= 0){
-        diff = a.prob[b.sort_class] - b.prob[b.sort_class];
+    if(b.top_prob >= 0){
+        diff = a.top_prob - b.top_prob;
     } else {
         diff = a.objectness - b.objectness;
     }
@@ -34,7 +34,7 @@ void do_nms_obj(detection *dets, int total, int classes, float thresh)
     total = k+1;
 
     for(i = 0; i < total; ++i){
-        dets[i].sort_class = -1;
+        dets[i].top_prob = -1;
     }
 
     qsort(dets, total, sizeof(detection), nms_comparator);
@@ -57,10 +57,13 @@ void do_nms_obj(detection *dets, int total, int classes, float thresh)
 
 void do_nms_sort(detection *dets, int total, int classes, float thresh)
 {
-    int i, j, k;
+    int i, j, k,k2;
     k = total-1;
     for(i = 0; i <= k; ++i){
         if(dets[i].objectness == 0){
+            for(j = 0; j < classes; ++j){
+                dets[i].prob[j] = 0;
+            }
             detection swap = dets[i];
             dets[i] = dets[k];
             dets[k] = swap;
@@ -70,17 +73,23 @@ void do_nms_sort(detection *dets, int total, int classes, float thresh)
     }
     total = k+1;
 
-    for(k = 0; k < classes; ++k){
-        for(i = 0; i < total; ++i){
-            dets[i].sort_class = k;
+    for(i = 0; i < total; ++i){
+        float best = 0;
+        for(k = 0; k < classes; ++k){
+            if(dets[i].prob[k] > best){
+                best = dets[i].prob[k];
+            }
         }
-        qsort(dets, total, sizeof(detection), nms_comparator);
-        for(i = 0; i < total; ++i){
-            if(dets[i].prob[k] == 0) continue;
-            box a = dets[i].bbox;
-            for(j = i+1; j < total; ++j){
-                box b = dets[j].bbox;
-                if (box_iou(a, b) > thresh){
+        dets[i].top_prob = best;
+    }
+    qsort(dets, total, sizeof(detection), nms_comparator);
+    for(i = 0; i < total; ++i){
+        if(dets[i].top_prob == 0) continue;
+        box a = dets[i].bbox;
+        for(j = i+1; j < total; ++j){
+            box b = dets[j].bbox;
+            if (box_iou(a, b) > thresh){
+                for(k = 0; k < classes; ++k){
                     dets[j].prob[k] = 0;
                 }
             }

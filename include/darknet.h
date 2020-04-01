@@ -522,7 +522,7 @@ typedef struct detection{
     float *prob;
     float *mask;
     float objectness;
-    int sort_class;
+    float top_prob;
 } detection;
 
 typedef struct matrix{
