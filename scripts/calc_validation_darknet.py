@@ -17,13 +17,13 @@ IOU_THRESH = 0.5
 EXPONENTAL_SCORE = False
 GAUSSIAN_SCORE =False
 CURVE_SMOOTHING = False
-ACCEPT_PARENT = False
+ACCEPT_PARENT = True
 ACCEPT_FIRST_PARENT =False
 
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
 
-USE_oLRP = True
+USE_oLRP = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -327,9 +327,9 @@ for PROB_THRESHOLD in run:
     false_positive = list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat))
 
     precision = len(true_positives)/(len(true_positives)+len(false_positive))
-    print(f"Precision {precision}")
+    print(f"precision {precision}")
     recall = len(true_positives)/(len(true_positives)+len(false_negatives))
-    print(f"Recall {recall}")
+    print(f"recall {recall}")
 
     if(not USE_oLRP):
         #Calulate MAP
@@ -430,6 +430,9 @@ for PROB_THRESHOLD in run:
             auc += (r1-r2)*p
 
         result = auc
+        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None,preds_flat))
+        avg_offset = sum(e.label.tree_offset for e in offset_preds)/len(offset_preds)
+        print("avg_offset", avg_offset)
         #Plot
         pres=[]
         inter=[]
