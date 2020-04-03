@@ -17,7 +17,7 @@ IOU_THRESH = 0.5
 EXPONENTAL_SCORE = False
 GAUSSIAN_SCORE =False
 CURVE_SMOOTHING = False
-ACCEPT_PARENT = True
+ACCEPT_PARENT = False
 ACCEPT_FIRST_PARENT =False
 
 POINT_INTER = False
@@ -313,7 +313,6 @@ for PROB_THRESHOLD in run:
         if label.prediction is not None:
             label.prediction.label = label
 
-
     #draw_dumb_box(predictions)
 
     try:
@@ -321,6 +320,13 @@ for PROB_THRESHOLD in run:
     except:
         print("No preductions, skipping")
         continue
+
+    predictions = None
+    labels = None
+
+    leaf_nodes = [n for n in species_nodes.values() if n.children == [] ]
+    labels_flat= [l for l in labels_flat if l.species in leaf_nodes]
+    preds_flat = [p for p in preds_flat if p.label is not None and p.label.species in leaf_nodes]
 
     true_positives = list(filter(lambda e: e.predicted,labels_flat))
     false_negatives = list(filter(lambda e: not e.predicted, labels_flat))
@@ -417,10 +423,12 @@ for PROB_THRESHOLD in run:
         #calc auc
         drop_list = []
         last = 2
-        for i in range(len(precision_list)):
+        drop_list.append(precision_list[0])
+        for i in range(0,len(precision_list)):
             if precision_list[i]["precision_inter"] < last:
                 drop_list.append(precision_list[i])
                 last = precision_list[i]["precision_inter"]
+        drop_list.append(precision_list[len(precision_list)-1])
 
         auc = 0
         for i in range(1,len(drop_list)):
