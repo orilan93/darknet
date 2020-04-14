@@ -1,29 +1,30 @@
-import os
-import xml.etree.ElementTree as ET
 import argparse
 import csv
 import functools
-import re
-from operator import add
-import matplotlib.pyplot as plt
-import pandas as pd
 import math
-import numpy as np
+import os
+import re
+import xml.etree.ElementTree as ET
+from operator import add
 
-PROB_THRESHOLD = 0.5
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+PROB_THRESHOLD = 0.01
 IOU_THRESH = 0.5
 
-#PR curve calculation method, NB mutual exclusive
+# PR curve calculation method, NB mutual exclusive
 EXPONENTAL_SCORE = False
-GAUSSIAN_SCORE =False
+GAUSSIAN_SCORE = False
 CURVE_SMOOTHING = False
-ACCEPT_PARENT = True
-ACCEPT_FIRST_PARENT =False
+ACCEPT_PARENT = False
+ACCEPT_FIRST_PARENT = False
 
 POINT_INTER = False
-POINT_INTER_SKIP = 0.1 # 0.1 for 11 point inter
+POINT_INTER_SKIP = 0.1  # 0.1 for 11 point inter
 
-USE_oLRP = False
+USE_oLRP = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -33,29 +34,31 @@ parser.add_argument("resolution", help="The resolution of the outputted images f
 parser.add_argument("names_file", help="The YOLO names file")
 args = parser.parse_args()
 
+
 class Node:
-    def __init__(self,name, parent = None):
-        self.name=name
+    def __init__(self, name, parent=None):
+        self.name = name
         self.namename = name
-        self.children=[]
+        self.children = []
         self.parent = parent
 
     def __repr__(self):
         return self.name
 
+
 class Prediction:
     label = None
     score = 0
+
     def __init__(self, image_id, species, prob, xmin, ymin, xmax, ymax):
         self.image_id = int(image_id)
         self.species = species_nodes[species]
         self.prob = float(prob)
 
-
         self.bbox = [float(xmin), float(ymin), float(xmax), float(ymax)]
         for i in range(len(self.bbox)):
             if self.bbox[i] < 0: self.bbox[i] = 0
-        #print(self.bbox)
+        # print(self.bbox)
 
     def __str__(self):
         return f"image_id: {self.image_id}, species: {self.species}, prob: {self.prob}, bbox: {self.bbox} |"
@@ -63,16 +66,18 @@ class Prediction:
     def __repr__(self):
         return f"image_id: {self.image_id}, species: {self.species}, prob: {self.prob}, bbox: {self.bbox} |"
 
+
 class Label:
     prediction = None
     iou = -1
     predicted = False
     tree_offset = None
+
     def __init__(self, image_id, species_id, rel_x, rel_y, rel_w, rel_h):
         self.image_id = int(image_id)
         self.species_id = int(species_id)
 
-        rel_x, rel_y, rel_w, rel_h =  float(rel_x), float(rel_y), float(rel_w), float(rel_h)
+        rel_x, rel_y, rel_w, rel_h = float(rel_x), float(rel_y), float(rel_w), float(rel_h)
         xmin = (rel_x - rel_w / 2) * resolution[0]
         ymin = (rel_y - rel_h / 2) * resolution[1]
         xmax = (rel_x + rel_w / 2) * resolution[0]
@@ -82,75 +87,77 @@ class Label:
 
         self.species = species_nodes[species_names[self.species_id]]
 
-
-
     def __str__(self):
         return f"image_id: {self.image_id}, species: {self.species}, bbox: {self.bbox} | "
 
     def __repr__(self):
         return f"image_id: {self.image_id}, species: {self.species}, bbox: {self.bbox} | "
 
+
 def depth_first(subtree, parent):
     node = Node(subtree.attrib["name"], parent)
     parent.children.append(node)
-    species_nodes[node.name]=node
+    species_nodes[node.name] = node
     for child in subtree:
         depth_first(child, node)
+
 
 def get_image_id(image_path):
     p = re.compile("\/(\d*).txt")
     result = p.search(image_path)
     return result.group(1)
 
+
 def in_parents(label_species, pred_species):
-    #label_species = species_nodes[label_species]
+    # label_species = species_nodes[label_species]
     parent = label_species.parent
     parent_offset = 0
     while parent != None:
-        parent_offset-=1
+        parent_offset -= 1
         if parent.name == pred_species.name:
             return True, parent_offset
         parent = parent.parent
     return False, 0
 
+
 def depth_first_in_children(node, offset, pred_species):
-    offset+=1
+    offset += 1
     results = []
     if len(node.children) > 0:
         for child in node.children:
             results.append(depth_first_in_children(child, offset, pred_species))
     if node.name == pred_species: return (True, offset)
-    return functools.reduce(lambda a,b: b if b[0] else a ,results, (False,0))
-
+    return functools.reduce(lambda a, b: b if b[0] else a, results, (False, 0))
 
 
 def in_children(label_species, pred_species):
-    #species_node = species_nodes[label_species]
-    return depth_first_in_children(label_species,0, pred_species.name )
+    # species_node = species_nodes[label_species]
+    return depth_first_in_children(label_species, 0, pred_species.name)
 
 
 def check_prediction(label):
-    label.predicted=False
-    if label.iou <  IOU_THRESH:
+    label.predicted = False
+    if label.iou < IOU_THRESH:
         return
     if label.species == label.prediction.species:
-        label.predicted = True; label.tree_offset = 0
+        label.predicted = True;
+        label.tree_offset = 0
         return
     is_in_children, tree_offset = in_children(label.species, label.prediction.species)
     if is_in_children:
         label.predicted = True
         label.tree_offset = tree_offset
         return
-    is_in_parents, tree_offset = in_parents(label.species,label.prediction.species)
+    is_in_parents, tree_offset = in_parents(label.species, label.prediction.species)
     if is_in_parents:
-        label.predicted = ACCEPT_PARENT or GAUSSIAN_SCORE or EXPONENTAL_SCORE #Must be true to use score
-        if(ACCEPT_FIRST_PARENT and tree_offset == -1):
+        label.predicted = ACCEPT_PARENT or GAUSSIAN_SCORE or EXPONENTAL_SCORE  # Must be true to use score
+        if (ACCEPT_FIRST_PARENT and tree_offset == -1):
             label.prediceted = True
         label.tree_offset = tree_offset
         return
 
 
-#stolen from here https://www.pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/
+# stolen from here https://www.pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/
 def bb_intersection_over_union(boxA, boxB):
     # determine the (x, y)-coordinates of the intersection rectangle
     xA = max(boxA[0], boxB[0])
@@ -170,6 +177,7 @@ def bb_intersection_over_union(boxA, boxB):
     # return the intersection over union value
     return iou
 
+
 def draw_dumb_box(preds):
     import cv2
     # load the image
@@ -178,28 +186,31 @@ def draw_dumb_box(preds):
     img_array = []
     size = None
     for image in preds:
-        loaded_image = cv2.imread("data/dataset/"+str(image)+".png")
+        loaded_image = cv2.imread("data/dataset/" + str(image) + ".png")
         height, width, layers = loaded_image.shape
         size = (width, height)
         for pred in preds[image]:
-            color = (0, 0,255)
+            color = (0, 0, 255)
             if pred.label is not None and pred.label.predicted == True:
-                color = (0,255,0)
-            elif pred.label is not None and( pred.label.tree_offset is not None) and pred.label.tree_offset < 0:
-                color =  (0,255,255)
+                color = (0, 255, 0)
+            elif pred.label is not None and (pred.label.tree_offset is not None) and pred.label.tree_offset < 0:
+                color = (0, 255, 255)
             pred_bbox = pred.bbox
+            '''
             if pred.label is not None:
-                cv2.putText(loaded_image, pred.label.species.name+str(pred.label.tree_offset),
+                cv2.putText(loaded_image, pred.label.species.name + str(pred.label.tree_offset),
                             (int(pred_bbox[0]), int(pred_bbox[1]) - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            '''
             cv2.putText(loaded_image, pred.species.name + str(pred.prob), (int(pred_bbox[0]), int(pred_bbox[1]) - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-            cv2.rectangle(loaded_image, (int(pred_bbox[0]),int(pred_bbox[1])),
+
+            cv2.rectangle(loaded_image, (int(pred_bbox[0]), int(pred_bbox[1])),
                           (int(pred_bbox[2]), int(pred_bbox[3])), color, 2)
-        #cv2.imshow(str(image), loaded_image)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
+        # cv2.imshow(str(image), loaded_image)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
         img_array.append(loaded_image)
-        status = cv2.imwrite('./preds/'+str(image)+'.png', loaded_image)
+        status = cv2.imwrite('./preds/' + str(image) + '.png', loaded_image)
         print("Image written to file-system : ", status)
 
     '''
@@ -209,13 +220,15 @@ def draw_dumb_box(preds):
     out.release()
     '''
 
+
 labels_flat = []
 species_names = []
 
-
 step = 0.01
-if USE_oLRP: run = np.arange(0.2, 1, step)
-else: run = [PROB_THRESHOLD]
+if USE_oLRP:
+    run = np.arange(0.2, 1, step)
+else:
+    run = [PROB_THRESHOLD]
 LRPs = []
 result = 0
 for PROB_THRESHOLD in run:
@@ -223,25 +236,25 @@ for PROB_THRESHOLD in run:
     species_names = []
     labels_flat = []
 
-    #load some misc data
-    resolution = (int(args.resolution.split("x")[0]),int(args.resolution.split("x")[1]))
+    # load some misc data
+    resolution = (int(args.resolution.split("x")[0]), int(args.resolution.split("x")[1]))
     with open(args.names_file) as names_file:
         csv_reader = csv.reader(names_file, delimiter=',')
         species_names.extend(name[0] for name in csv_reader)
 
-    #load tree
+    # load tree
     tree = ET.parse(args.tree_file)
     root = tree.getroot()[0]
     root_class = Node(root.attrib["name"])
     species_nodes = {}
-    species_nodes[root_class.name]=root_class
+    species_nodes[root_class.name] = root_class
     for child in root:
-        depth_first(child,root_class)
+        depth_first(child, root_class)
 
     # Load results
     files = [f for f in os.listdir(args.results_folder)
              if os.path.isfile(os.path.join(args.results_folder, f)) and f.split('.')[-1] == 'txt']
-    predictions={}
+    predictions = {}
 
     for file in files:
         file_path = os.path.join(args.results_folder, file)
@@ -252,12 +265,17 @@ for PROB_THRESHOLD in run:
             if species not in species_names:
                 raise AssertionError("Tried to load results file from class that is not in names file")
             for row in csv_reader:
-                prediction = Prediction(row[0], species, row[1], row[2], row[3],row[4],row[5])
-                if(float(row[1]) < PROB_THRESHOLD): continue
+                prediction = Prediction(row[0], species, row[1], row[2], row[3], row[4], row[5])
+                if (float(row[1]) < PROB_THRESHOLD): continue
                 predictions.setdefault(int(row[0]), [])
                 predictions[int(row[0])].append(prediction)
-    #print("Loaded predictions:")
-    #print(predictions)
+    # print("Loaded predictions:")
+    # print(predictions)
+
+    for image_id, image_preds in predictions.items():
+        image_preds.sort(key=lambda e: e.prob)
+        image_preds.reverse()
+        predictions[image_id] = image_preds
 
     # Load Ground Truth
     labels = {}
@@ -265,37 +283,38 @@ for PROB_THRESHOLD in run:
     with open(args.manifest_file) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         for row in csv_reader:
-            label_file = row[0][:-3]+"txt"
+            label_file = row[0][:-3] + "txt"
             image_id = get_image_id(label_file)
             with open(label_file) as csv_label_file:
                 csv_label_reader = csv.reader(csv_label_file, delimiter=' ')
                 for row in csv_label_reader:
-                    labels.setdefault(int(image_id),[])
-                    labels[int(image_id)].append(Label(image_id, row[0],row[1], row[2], row[3],row[4]))
+                    labels.setdefault(int(image_id), [])
+                    labels[int(image_id)].append(Label(image_id, row[0], row[1], row[2], row[3], row[4]))
 
-    #print("Loaded labels:")
-    #print(labels)
+    # print("Loaded labels:")
+    # print(labels)
 
-    #calculate IOU
+    # calculate IOU
 
-    #Assosicate labels and predictions
+    # Assosicate labels and predictions
     for image_id, image_labels in labels.items():
         for label in image_labels:
             if predictions.get(image_id) == None: continue
             best_iou = -1
-            best_pred = None
+            best_pred = Prediction(-1, "Fish", -1, 0, 0, 0, 0)
             for pred in predictions[image_id]:
                 iou = bb_intersection_over_union(label.bbox, pred.bbox)
-                if iou > best_iou and iou > IOU_THRESH:
+                if pred.prob > best_pred.prob and iou > IOU_THRESH:
                     best_iou = iou
                     best_pred = pred
-            if(best_pred is not None):
+            if (best_pred is not None):
                 label.iou = best_iou
                 label.prediction = best_pred
+                best_iou = -1
+                best_pred = Prediction(-1, "Fish", -1, 0, 0, 0, 0)
+                continue
 
-                #print(f"im: {image_id} iou: {best_iou} species: {label.species} ")
-
-
+                # print(f"im: {image_id} iou: {best_iou} species: {label.species} ")
 
     labels_flat = []
     for image_id, image_labels in labels.items():
@@ -306,15 +325,14 @@ for PROB_THRESHOLD in run:
                 predicted_species = label.prediction.species.name
             except:
                 predicted_species = "n/a"
-            #print(f"im: {label.image_id} predicted: {label.predicted} iou: {label.iou} offset: {label.tree_offset} real_species: {label.species} prediceted: {predicted_species}")
+            # print(f"im: {label.image_id} predicted: {label.predicted} iou: {label.iou} offset: {label.tree_offset} real_species: {label.species} prediceted: {predicted_species}")
 
-    #Associate lables in from prediction
+    # Associate lables in from prediction
     for label in labels_flat:
         if label.prediction is not None:
             label.prediction.label = label
 
-
-    #draw_dumb_box(predictions)
+    # draw_dumb_box(predictions)
 
     try:
         preds_flat = functools.reduce(add, predictions.values())
@@ -322,17 +340,41 @@ for PROB_THRESHOLD in run:
         print("No preductions, skipping")
         continue
 
-    true_positives = list(filter(lambda e: e.predicted,labels_flat))
+    true_positives = list(filter(lambda e: e.predicted, labels_flat))
     false_negatives = list(filter(lambda e: not e.predicted, labels_flat))
     false_positive = list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat))
 
-    precision = len(true_positives)/(len(true_positives)+len(false_positive))
-    print(f"precision {precision}")
-    recall = len(true_positives)/(len(true_positives)+len(false_negatives))
-    print(f"recall {recall}")
+    precision = len(true_positives) / (len(true_positives) + len(false_positive))
+    print(f"Precision {precision}")
+    recall = len(true_positives) / (len(true_positives) + len(false_negatives))
+    print(f"Recall {recall}")
 
-    if(not USE_oLRP):
-        #Calulate MAP
+    import pandas as pd
+    import seaborn as sn
+    from matplotlib.colors import SymLogNorm
+
+    species_names_confusion_order = ['Fish',
+                                     'Gadidae', 'Pollachius', 'Pollachius virens',
+                                     'Pollachius pollachius', 'Cyclopterus lumpus', 'Labridae',
+                                     'Labrus bergylta', 'Ctenolabrus rupestris', ]
+    df = pd.DataFrame([], index=species_names_confusion_order, columns=species_names_confusion_order)
+    df = df.fillna(0)
+
+    for e in preds_flat:
+        if e.label is None: continue
+        pred_species = e.species.name
+        label_species = e.label.species.name
+        df[pred_species][label_species] = df[pred_species][label_species] + 1
+    # sn.set_style("ticks")
+    df.index.name = 'Actual'
+    df.columns.name = 'Predicted'
+    plt.figure(figsize=(10, 8))
+    sn.heatmap(df, cmap="Blues", annot=True, fmt='g', norm=SymLogNorm(1, vmin=0, vmax=413.))
+    # plt.savefig('heatmap.pdf', dpi=800)
+    plt.show()
+
+    if (not USE_oLRP):
+        # Calulate MAP
         preds_flat.sort(key=lambda e: e.prob)
         preds_flat.reverse()
         precision_list = []
@@ -341,80 +383,77 @@ for PROB_THRESHOLD in run:
 
         for e in preds_flat:
 
-            if(e.label is None or e.label.predicted == False): ##Not predicted
+            if (e.label is None or e.label.predicted == False):  ##Not predicted
                 e.score = 0
 
             elif (e.label.tree_offset < 0):
                 offset = abs(e.label.tree_offset)
-                if(EXPONENTAL_SCORE):
-                    e.score = (10**(1/(offset+1)))/10
-                elif(GAUSSIAN_SCORE):
-                    #e^(-(x^2)/2)
-                    e.score = math.exp(-(offset)**2/2)
+                if (EXPONENTAL_SCORE):
+                    e.score = (10 ** (1 / (offset + 1))) / 10
+                elif (GAUSSIAN_SCORE):
+                    # e^(-(x^2)/2)
+                    e.score = math.exp(-(offset) ** 2 / 2)
                     pass
                 else:
-                    e.score=1
+                    e.score = 1
 
             elif (e.label.tree_offset >= 0):
                 e.score = 1
 
         for i in range(len(preds_flat)):
-            true_positives = list(filter(lambda e: e.label is not None and e.label.predicted,preds_flat[:i+1]))
-            false_positives =  list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat[:i+1]))
+            true_positives = list(filter(lambda e: e.label is not None and e.label.predicted, preds_flat[:i + 1]))
+            false_positives = list(filter(lambda e: e.label is None or not e.label.predicted, preds_flat[:i + 1]))
 
-            #precision = len(true_positives) / (len(true_positives) + len(false_positives))
-            precision = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_positives))
-            recall = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_negatives))
-            #recall = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_negatives))
-            #print(recall)
+            # precision = len(true_positives) / (len(true_positives) + len(false_positives))
+            precision = sum(map(lambda e: e.score, true_positives)) / (len(true_positives) + len(false_positives))
+            recall = sum(map(lambda e: e.score, true_positives)) / (len(true_positives) + len(false_negatives))
+            # recall = sum(map(lambda e: e.score,true_positives)) / (len(true_positives) + len(false_negatives))
+            # print(recall)
             predicted = preds_flat[i].label is not None and preds_flat[i].label.predicted
 
-            row = {"predicted":predicted,"precision":precision, "recall": recall}
+            row = {"predicted": predicted, "precision": precision, "recall": recall}
             precision_list.append(row)
 
-        #print(precision_list)
+        # print(precision_list)
 
-
-        if(CURVE_SMOOTHING):
+        if (CURVE_SMOOTHING):
             precision_list[0]["smooth"] = precision_list[0]["precision"]
-            for i in range(1, len(precision_list)-1):
+            for i in range(1, len(precision_list) - 1):
                 '''
                 avg = 0
                 for j in range(-2,2):
                     avg = avg+precision_list[i-j]["precision"]
                 avg = avg/5
                 '''
-                avg = (precision_list[i-1]["precision"]*10+precision_list[i]["precision"]+precision_list[i+1]["precision"]*10)/21
+                avg = (precision_list[i - 1]["precision"] * 10 + precision_list[i]["precision"] + precision_list[i + 1][
+                    "precision"] * 10) / 21
 
                 precision_list[i]["smooth"] = avg
             precision_list[-1]["smooth"] = precision_list[-1]["precision"]
 
-
             for e in precision_list:
                 e["precision"] = e["smooth"]
 
-        #do interpolation
+        # do interpolation
 
-        if(POINT_INTER):
+        if (POINT_INTER):
             skip = POINT_INTER_SKIP
-            for r in np.arange(0,1,skip):
-                max =0
-                rows = [x for x in precision_list if( x["recall"] > r and x["recall"] <= (r + skip))]
+            for r in np.arange(0, 1, skip):
+                max = 0
+                rows = [x for x in precision_list if (x["recall"] > r and x["recall"] <= (r + skip))]
                 for row in rows:
-                    if row["precision"]> max: max = row["precision"]
+                    if row["precision"] > max: max = row["precision"]
                 for row in rows:
                     row["precision_inter"] = max
         else:
             for i in range(len(precision_list)):
                 r = filter(lambda e: e["recall"] >= precision_list[i]["recall"], precision_list)
-                r = max(r, key = lambda e: e["precision"])
+                r = max(r, key=lambda e: e["precision"])
                 precision_list[i]["precision_inter"] = r["precision"]
 
+        # print(precision_list)
 
-        #print(precision_list)
-
-
-        #calc auc
+        # calc auc
         drop_list = []
         last = 2
         for i in range(len(precision_list)):
@@ -423,27 +462,31 @@ for PROB_THRESHOLD in run:
                 last = precision_list[i]["precision_inter"]
 
         auc = 0
-        for i in range(1,len(drop_list)):
+        for i in range(1, len(drop_list)):
             r1 = drop_list[i]["recall"]
-            r2 = drop_list[i-1]["recall"]
-            p = drop_list[i-1]["precision_inter"] #Here we miht want to use just percision instead
-            auc += (r1-r2)*p
+            r2 = drop_list[i - 1]["recall"]
+            p = drop_list[i - 1]["precision_inter"]  # Here we miht want to use just percision instead
+            auc += (r1 - r2) * p
 
         result = auc
-        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None,preds_flat))
-        avg_offset = sum(e.label.tree_offset for e in offset_preds)/len(offset_preds)
+        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None, preds_flat))
+        avg_offset = sum(e.label.tree_offset for e in offset_preds) / len(offset_preds)
         print("avg_offset", avg_offset)
-        #Plot
-        pres=[]
-        inter=[]
+        # Plot
+        pres = []
+        inter = []
         rec = []
         for e in precision_list:
             pres.append(e["precision"])
             inter.append(e["precision_inter"])
             rec.append(e["recall"])
 
-        plt.plot(rec,pres)
-        plt.plot(rec,inter)
+        # fill = plt.fill_between(rec, inter,0.8, alpha = 0.4, label = 'mAP')
+        inter, = plt.plot(rec, inter, label='Interpolation')
+        rp_curve, = plt.plot(rec, pres, label='RP-Curve')
+        plt.legend(handles=[inter, rp_curve])
+        plt.xlabel("Precision")
+        plt.ylabel("Recall")
         plt.savefig('filename.pdf', dpi=800)
         plt.show()
 
@@ -459,8 +502,8 @@ for PROB_THRESHOLD in run:
             lrp_iou += (1 - e.iou) / (1 - tau)
         LRP = (lrp_iou + len(false_negatives) + len(false_positive)) / \
               (len(true_positives) + len(false_positive) + len(false_negatives))
-        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None,preds_flat))
-        avg_offset = sum(e.label.tree_offset for e in offset_preds)/len(offset_preds)
+        offset_preds = list(filter(lambda e: e.label is not None and e.label.tree_offset is not None, preds_flat))
+        avg_offset = sum(e.label.tree_offset for e in offset_preds) / len(offset_preds)
         LRPs.append((LRP, s, precision, recall, avg_offset))
         print("LRP:", LRP, s)
 

@@ -88,9 +88,11 @@ void do_nms_sort(detection *dets, int total, int classes, float thresh)
         box a = dets[i].bbox;
         for(j = i+1; j < total; ++j){
             box b = dets[j].bbox;
-            if (box_iou(a, b) > thresh){
+            float iou = box_iou(a, b);
+            if (iou > thresh){
+                float ov = (1 - iou);// 0;//exp(-(iou*iou)/0.5); //(1 - iou);
                 for(k = 0; k < classes; ++k){
-                    dets[j].prob[k] = 0;
+                    dets[j].prob[k] = ov * dets[j].prob[k];
                 }
             }
         }
