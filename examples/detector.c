@@ -454,6 +454,7 @@ void validate_detector(char *datacfg, char *cfgfile, char *weightfile, float thr
             thr[t] = load_data_in_thread(args);
         }
         for(t = 0; t < nthreads && i+t-nthreads < m; ++t){
+            double time = what_time_is_it_now();
             char *path = paths[i+t-nthreads];
             char *id = basecfg(path);
             float *X = val_resized[t].data;
@@ -463,6 +464,7 @@ void validate_detector(char *datacfg, char *cfgfile, char *weightfile, float thr
             int nboxes = 0;
             detection *dets = get_network_boxes(net, w, h, thresh, hier_thresh, map, 0, &nboxes);
             if (nms) do_nms_sort(dets, nboxes, classes, nms);
+            printf("Predicted: %lf seconds\n", what_time_is_it_now()-time);
             if (coco){
                 print_cocos(fp, path, dets, nboxes, classes, w, h);
             } else if (imagenet){
