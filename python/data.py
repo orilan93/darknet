@@ -1,0 +1,10 @@
+classes = [
+    "Fish",
+    "Gadidae",
+    "Cyclopterus lumpus",
+    "Labridae",
+    "Pollachius",
+    "Labrus bergylta",
+    "Ctenolabrus rupestris",
+    "Pollachius virens",
+    "Pollachius pollachius"]

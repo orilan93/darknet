@@ -4,6 +4,7 @@ import ffmpeg
 import darknet_fish as dn
 from overlay import draw_overlay
 import time
+from experiments import detection_difference
 
 net = dn.load_net(b"data/fish.cfg", b"data/fish.weights", 0)
 meta = dn.load_meta(b"data/fish.data")
@@ -11,8 +12,9 @@ meta = dn.load_meta(b"data/fish.data")
 VIDEO_URI = "recording.mp4"
 WIDTH = 1920
 HEIGHT = 1080
+WINDOW_NAME = "Fish Species Detection"
 
-cv2.namedWindow("Fish Species Detection", cv2.WND_PROP_AUTOSIZE)
+cv2.namedWindow(WINDOW_NAME, cv2.WND_PROP_AUTOSIZE)
 
 process1 = (
     ffmpeg
@@ -41,10 +43,11 @@ while True:
 
     detections = dn.detect(net, meta, frame)
     print(detections)
+    detection_difference(detections)
     frame = draw_overlay(frame, detections, fps)
 
-    cv2.imshow("Fish Species Detection", frame)
-    if cv2.waitKey(5) == 27:
+    cv2.imshow(WINDOW_NAME, frame)
+    if cv2.waitKey(1) == 27:
         break
 
 cv2.destroyAllWindows()
