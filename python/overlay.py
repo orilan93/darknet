@@ -45,23 +45,26 @@ def draw_hud_pil(draw, detections):
     for d in detections:
         list[d[0]] += 1
     for index, key in enumerate(list):
-        draw.text((8, 32+32*index), "{}: {}".format(key.decode('ascii'), list[key]), font=font, fill=(0, 0, 0))
+        draw.text((8, 32+32*index), "{}: {}".format(key, list[key]), font=font, fill=(0, 0, 0))
     return
 
+def convert_bbox(bbox):
+    cx = bbox[0]
+    cy = bbox[1]
+    bw = bbox[2]
+    bh = bbox[3]
+    x1 = int(cx - bw / 2)
+    y1 = int(cy - bh / 2)
+    x2 = int(cx + bw / 2)
+    y2 = int(cy + bh / 2)
+    return (x1,y1,x2,y2)
 
 def draw_detections_pil(draw, detections):
     for d in detections:
         bbox = d[2]
-        cx = bbox[0]
-        cy = bbox[1]
-        bw = bbox[2]
-        bh = bbox[3]
-        x1 = int(cx - bw / 2)
-        y1 = int(cy - bh / 2)
-        x2 = int(cx + bw / 2)
-        y2 = int(cy + bh / 2)
-        draw.rectangle(((x1, y1), (x2, y2)), outline=colors[d[0].decode('ascii')], width=2)
-        draw.text((x1, y1 - 32), d[0].decode('ascii'), font=font, fill=(0, 0, 0))
+        draw.rectangle(((bbox[0], bbox[1]), (bbox[2], bbox[3])), outline=colors[d[0]], width=2)
+
+        draw.text((bbox[0], bbox[1] - 32),d[0], font=font, fill=(0, 0, 0))
 
 
 def draw_overlay_cairo(image, detections, fps):

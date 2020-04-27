@@ -24,7 +24,7 @@ ACCEPT_FIRST_PARENT = False
 POINT_INTER = False
 POINT_INTER_SKIP = 0.1  # 0.1 for 11 point inter
 
-USE_oLRP = True
+USE_oLRP = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument("tree_file", help="The xml tree file.")
@@ -485,8 +485,8 @@ for PROB_THRESHOLD in run:
         inter, = plt.plot(rec, inter, label='Interpolation')
         rp_curve, = plt.plot(rec, pres, label='RP-Curve')
         plt.legend(handles=[inter, rp_curve])
-        plt.xlabel("Precision")
-        plt.ylabel("Recall")
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
         plt.savefig('filename.pdf', dpi=800)
         plt.show()
 

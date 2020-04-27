@@ -11,7 +11,7 @@ def detection_difference(detections):
 
     list = defaultdict(int)
     for d in detections:
-        list[d[0]] += 1
+        list[str.encode(d[0])] += 1
 
     if total_frames > 0:
         for c in classes:
