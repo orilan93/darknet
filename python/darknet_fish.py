@@ -37,8 +37,7 @@ class METADATA(Structure):
                 ("names", POINTER(c_char_p))]
 
 
-lib = CDLL("/home/espen/Dev/darknet/darknet_orjan/libdarknet.so", RTLD_GLOBAL)
-#lib = CDLL(os.path.abspath("libdarknet.so"), RTLD_GLOBAL)
+lib = CDLL(os.path.abspath("libdarknet.so"), RTLD_GLOBAL)
 lib.network_width.argtypes = [c_void_p]
 lib.network_width.restype = c_int
 lib.network_height.argtypes = [c_void_p]
@@ -117,13 +116,33 @@ def classify(net, meta, im):
     return res
 
 
+def convert_bbox(bbox):
+    cx = bbox[0]
+    cy = bbox[1]
+    bw = bbox[2]
+    bh = bbox[3]
+    x1 = int(cx - bw / 2)
+    y1 = int(cy - bh / 2)
+    x2 = int(cx + bw / 2)
+    y2 = int(cy + bh / 2)
+    return x1, y1, x2, y2
+
+
+def convert_detections(detections):
+    detections_new = []
+    for d in detections:
+        new_bbox = convert_bbox(d[2])
+        detections_new.append((d[0].decode("ascii"), d[1], new_bbox))
+    return detections_new
+
+
 def array_to_image(arr):
     # need to return old values to avoid python freeing memory
-    arr = arr.transpose(2,0,1)
+    arr = arr.transpose(2, 0, 1)
     c, h, w = arr.shape[0:3]
     arr = np.ascontiguousarray(arr.flat, dtype=np.float32) / 255.0
     data = arr.ctypes.data_as(POINTER(c_float))
-    im = IMAGE(w,h,c,data)
+    im = IMAGE(w, h, c, data)
     return im, arr
 
 
@@ -146,7 +165,7 @@ def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
             for i in ai:
                 b = dets[j].bbox
                 res.append((meta.names[i], dets[j].prob[i],
-                           (b.x, b.y, b.w, b.h)))
+                            (b.x, b.y, b.w, b.h)))
 
     res = sorted(res, key=lambda x: -x[1])
     if isinstance(image, bytes): free_image(im)
