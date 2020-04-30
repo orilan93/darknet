@@ -8,46 +8,30 @@ import experiments as ex
 from smooth import smooth
 from sort import Sort
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 
 net = dn.load_net(b"data/fish.cfg", b"data/fish.weights", 0)
 meta = dn.load_meta(b"data/fish.data")
 
-VIDEO_URI = "recording.mp4"
+VIDEO_URI = "FiskKlippet2.mp4"
 WIDTH = 1920
 HEIGHT = 1080
 WINDOW_NAME = "Fish Species Detection"
 USE_SORT = True
 USE_OPENCV = False
-CROP_BOUNDS = (650, 300, 1250, 700)
 
 if USE_OPENCV:
     cv2.namedWindow(WINDOW_NAME, cv2.WND_PROP_AUTOSIZE)
 
 process1 = (
     ffmpeg
-    .input(VIDEO_URI, ss="2")
-    .output('pipe:', format='rawvideo', pix_fmt='bgr24')
-    .run_async(pipe_stdout=True)
+        .input(VIDEO_URI, ss="245.6")
+        .output('pipe:', format='rawvideo', pix_fmt='bgr24')
+        .run_async(pipe_stdout=True)
 )
 
 frame_num = 0
-ax = plt.gca()
-ax.set_xlim([0, 4])
-ax.set_ylim([0, 3])
-ax.get_yaxis().set_visible(False)
-ax.xaxis.set_major_locator(ticker.FixedLocator(np.arange(0.5, 4.5, 1)))
-ax.set_xticklabels(['t', 't+1', 't+2', 't+3'])
-#ax.set_xticklabels(labels)
 
-
-def capture_timeframe(frame, col, row):
-    frame_fixed = frame[:, :, ::-1]
-    frame_cropped = frame_fixed[CROP_BOUNDS[1]:CROP_BOUNDS[3],CROP_BOUNDS[0]:CROP_BOUNDS[2],:]
-    ax.imshow(frame_cropped, extent=[col, col+1, row, row+1], origin='upper', aspect='auto')
-
-
-mot_tracker = Sort(max_age=10, min_hits=2)
+mot_tracker = Sort(max_age=3, min_hits=2)
 start = time.time()
 
 while True:
@@ -57,8 +41,8 @@ while True:
         break
     frame = (
         np
-        .frombuffer(in_bytes, np.uint8)
-        .reshape([HEIGHT, WIDTH, 3])
+            .frombuffer(in_bytes, np.uint8)
+            .reshape([HEIGHT, WIDTH, 3])
     )
 
     current = time.time()
@@ -68,18 +52,22 @@ while True:
 
     detections = dn.detect(net, meta, frame, thresh=.5, hier_thresh=.5, nms=.45)
     detections = dn.convert_detections(detections)
-    frame1 = draw_detections_color(frame, detections, 'red')
-    capture_timeframe(frame1, frame_num, 0)
+
+    frame1 = draw_detections_color(frame, detections, 'red', text=True)  # actually blue
+    ex.capture_timeframe(frame1, frame_num, 2)
+
+    frame2 = draw_detections_color(frame, detections, 'red')
+
     if USE_SORT:
         detections = smooth(detections, mot_tracker)
 
-    frame2 = draw_detections_color(frame1, detections,  'blue')
-    capture_timeframe(frame2, frame_num, 1)
+    frame2 = draw_detections_color(frame2, detections, 'blue', text=True)
+    ex.capture_timeframe(frame2, frame_num, 1)
 
-    frame3 = draw_detections_color(frame, detections,  'blue')
-    capture_timeframe(frame3, frame_num, 2)
+    frame3 = draw_detections_color(frame, detections, 'blue', text=True)  # actually red
+    ex.capture_timeframe(frame3, frame_num, 0)
 
-    #frame = draw_overlay(frame, detections, fps)
+    frame = draw_overlay(frame, detections, fps)
     ex.detection_difference(detections)
     ex.detections_count(detections)
 

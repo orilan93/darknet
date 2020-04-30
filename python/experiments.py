@@ -1,5 +1,8 @@
 from collections import defaultdict
 from data import classes
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
 
 last = defaultdict(int)
 total_frames = 0
@@ -32,3 +35,18 @@ def detections_count(detections):
     average_detections = total_detections/total_frames
     print("Total detections: {}".format(total_detections))
     print("Average detections per frame : {}".format(average_detections))
+
+
+CROP_BOUNDS = (300, 300, 600, 700)
+ax = plt.gca()
+ax.set_xlim([0, 4])
+ax.set_ylim([0, 3])
+ax.get_yaxis().set_visible(False)
+ax.xaxis.set_major_locator(ticker.FixedLocator(np.arange(0.5, 4.5, 1)))
+ax.set_xticklabels(['t', 't+1', 't+2', 't+3'])
+
+
+def capture_timeframe(frame, col, row):
+    frame_fixed = frame[:, :, ::-1]
+    frame_cropped = frame_fixed[CROP_BOUNDS[1]:CROP_BOUNDS[3],CROP_BOUNDS[0]:CROP_BOUNDS[2],:]
+    ax.imshow(frame_cropped, extent=[col, col+1, row, row+1], origin='upper', aspect='auto')
