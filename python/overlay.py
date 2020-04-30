@@ -55,5 +55,14 @@ def draw_detections_pil(draw, detections):
         draw.text((bbox[0], bbox[1] - 32),d[0], font=font, fill=(0, 0, 0))
 
 
+def draw_detections_color(image, detections, color):
+    pil_im = Image.fromarray(image)
+    draw = ImageDraw.Draw(pil_im)
+    for d in detections:
+        bbox = d[2]
+        draw.rectangle(((bbox[0], bbox[1]), (bbox[2], bbox[3])), outline=color, width=2)
+    return np.array(pil_im)
+
+
 def draw_overlay_cairo(image, detections, fps):
     return
