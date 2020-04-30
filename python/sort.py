@@ -113,6 +113,7 @@ class KalmanBoxTracker(object):
         """
         Updates the state vector with observed bbox.
         """
+        self.objclass = bbox[6]
         self.time_since_update = 0
         self.history = []
         self.hits += 1
