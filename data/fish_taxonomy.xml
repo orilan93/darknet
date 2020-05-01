@@ -1,0 +1,15 @@
+<tree>
+	<node name="Fish">
+			<node name="Gadidae">
+				<node name="Pollachius">
+					<node name="Pollachius virens" />
+					<node name="Pollachius pollachius" english="Atlantic pollock" norwegian="Lyr" />
+				</node>
+			</node>
+		<node name="Cyclopterus lumpus" english="Lumpfish" norwegian="Rognkjeks" />
+		<node name="Labridae">
+			<node name="Labrus bergylta" english="Ballan wrasse" norwegian="Berggylt" />
+			<node name="Ctenolabrus rupestris" english="Goldsinny wrasse" norwegian="Bergnebb" />
+		</node>
+	</node>
+</tree>
