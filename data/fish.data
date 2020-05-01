@@ -1,0 +1,5 @@
+classes = 9
+train = data/train.manifest
+valid = data/test.manifest
+names = data/fish.names
+backup = backup
