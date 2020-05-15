@@ -7,6 +7,7 @@ import time
 import experiments as ex
 from smooth import smooth
 from sort import Sort
+from stream import stream_process, stream_write, stream_close
 
 net = dn.load_net(b"data/fish.cfg", b"data/fish.weights", 0)
 meta = dn.load_meta(b"data/fish.data")
@@ -16,18 +17,26 @@ WIDTH = 1920
 HEIGHT = 1080
 WINDOW_NAME = "Fish Species Detection"
 USE_SORT = True
+USE_OPENCV = True
+STREAM = False
 
-cv2.namedWindow(WINDOW_NAME, cv2.WND_PROP_AUTOSIZE)
+if USE_OPENCV:
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
 process1 = (
     ffmpeg
-    .input(VIDEO_URI)
-    .output('pipe:', format='rawvideo', pix_fmt='bgr24')
-    .run_async(pipe_stdout=True)
+        .input(VIDEO_URI)
+        .filter("fps", fps=11)
+        .output('pipe:', format='rawvideo', pix_fmt='bgr24')
+        .run_async(pipe_stdout=True)
 )
 
-mot_tracker = Sort(max_age=10, min_hits=2)
+if STREAM:
+    process2 = stream_process(WIDTH, HEIGHT)
+
+mot_tracker = Sort(max_age=3, min_hits=2)
 start = time.time()
+
 while True:
 
     in_bytes = process1.stdout.read(WIDTH * HEIGHT * 3)
@@ -35,8 +44,8 @@ while True:
         break
     frame = (
         np
-        .frombuffer(in_bytes, np.uint8)
-        .reshape([HEIGHT, WIDTH, 3])
+            .frombuffer(in_bytes, np.uint8)
+            .reshape([HEIGHT, WIDTH, 3])
     )
 
     current = time.time()
@@ -44,18 +53,24 @@ while True:
     fps = 1 / elapsed
     start = current
 
-    detections = dn.detect(net, meta, frame, thresh=.5, hier_thresh=.5, nms=.45)
+    detections = dn.detect(net, meta, frame, thresh=.71, hier_thresh=.5, nms=.45)
     detections = dn.convert_detections(detections)
 
     if USE_SORT:
         detections = smooth(detections, mot_tracker)
 
     frame = draw_overlay(frame, detections, fps)
-    ex.detection_difference(detections)
-    ex.detections_count(detections)
 
-    cv2.imshow(WINDOW_NAME, frame)
-    if cv2.waitKey(1) == 27:
-        break
+    if STREAM:
+        stream_write(process2, frame)
 
-cv2.destroyAllWindows()
+    if USE_OPENCV:
+        cv2.imshow(WINDOW_NAME, frame)
+        if cv2.waitKey(1) == 27:
+            break
+
+if USE_OPENCV:
+    cv2.destroyAllWindows()
+
+if STREAM:
+    stream_close(process2)
