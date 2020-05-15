@@ -37,7 +37,7 @@ def detections_count(detections):
     print("Average detections per frame : {}".format(average_detections))
 
 
-CROP_BOUNDS = (300, 300, 600, 700)
+CROP_BOUNDS = (200, 300, 700, 800)
 ax = plt.gca()
 ax.set_xlim([0, 4])
 ax.set_ylim([0, 3])
